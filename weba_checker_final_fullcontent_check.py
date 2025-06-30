@@ -14,6 +14,9 @@ load_dotenv()
 API_TOKEN = os.getenv('API_TOKEN')
 ACCESS_PASSWORD = os.getenv('ACCESS_PASSWORD')
 
+print("Bot is starting...")
+print(f"TOKEN loaded: {bool(API_TOKEN)} | PASSWORD loaded: {bool(ACCESS_PASSWORD)}")
+
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
@@ -26,16 +29,20 @@ user_sessions = {}
 
 @dp.message(Command(commands=["start"]))
 async def cmd_start(message: types.Message, state: FSMContext):
+    print(f"[START] User {message.from_user.id} sent /start")
     await state.set_state(FileUploadState.waiting_for_password)
     await message.answer("🔐 Please enter the access password:")
 
 @dp.message(FileUploadState.waiting_for_password)
 async def check_password(message: types.Message, state: FSMContext):
+    print(f"[PASSWORD] User {message.from_user.id} entered: {message.text}")
     if message.text == ACCESS_PASSWORD:
         user_sessions[message.from_user.id] = tempfile.mkdtemp()
+        print(f"[ACCESS GRANTED] Session created for user {message.from_user.id}")
         await state.set_state(FileUploadState.waiting_for_domains)
         await message.answer("✅ Access granted. Please upload `domains.txt`.")
     else:
+        print(f"[ACCESS DENIED] Wrong password from user {message.from_user.id}")
         await message.answer("⛔ Incorrect password. Please try again.")
 
 @dp.message(FileUploadState.waiting_for_domains)
@@ -46,6 +53,7 @@ async def get_domains(message: types.Message, state: FSMContext):
 
     file_path = os.path.join(user_sessions[message.from_user.id], "domains.txt")
     await message.document.download(destination_file=file_path)
+    print(f"[UPLOAD] domains.txt received from user {message.from_user.id}")
     await state.set_state(FileUploadState.waiting_for_keywords)
     await message.answer("📥 `domains.txt` received. Now upload `keywords.txt`.")
 
@@ -57,6 +65,7 @@ async def get_keywords(message: types.Message, state: FSMContext):
 
     file_path = os.path.join(user_sessions[message.from_user.id], "keywords.txt")
     await message.document.download(destination_file=file_path)
+    print(f"[UPLOAD] keywords.txt received from user {message.from_user.id}")
 
     await message.answer("🚀 Starting the analysis. This may take some time...")
     work_dir = user_sessions[message.from_user.id]
@@ -67,6 +76,7 @@ async def get_keywords(message: types.Message, state: FSMContext):
         with open(script_path, "w", encoding="utf-8") as dst:
             dst.write(src.read())
 
+    print(f"[RUN] Executing script for user {message.from_user.id} in {work_dir}")
     process = subprocess.run(
         ["python", script_path],
         cwd=work_dir
@@ -76,12 +86,17 @@ async def get_keywords(message: types.Message, state: FSMContext):
     no_match_path = os.path.join(work_dir, "no_match_log.txt")
 
     if os.path.exists(results_path):
+        print(f"[RESULT] Sending results.csv to user {message.from_user.id}")
         await message.answer_document(FSInputFile(results_path))
     if os.path.exists(no_match_path):
+        print(f"[RESULT] Sending no_match_log.txt to user {message.from_user.id}")
         await message.answer_document(FSInputFile(no_match_path))
 
     await message.answer("✅ Analysis complete. Use /start to begin again.")
+    print(f"[DONE] Session complete for user {message.from_user.id}")
     await state.clear()
 
 if __name__ == '__main__':
+    print("About to start polling...")
     asyncio.run(dp.start_polling(bot))
+    print("Polling finished")
