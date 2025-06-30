@@ -25,16 +25,19 @@ dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
+# Define states for the conversation flow
 class FileUploadState(StatesGroup):
     waiting_for_password = State()
     waiting_for_domains = State()
     waiting_for_keywords = State()
 
+# Store user session data, temporary directories for file storage
 user_sessions = {}
 
 @router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     print(f"[START] User {message.from_user.id} sent /start")
+    # Set state to waiting for password on /start
     await state.set_state(FileUploadState.waiting_for_password)
     await message.answer("🔐 Please enter the access password:")
 
@@ -42,8 +45,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
 async def check_password(message: types.Message, state: FSMContext):
     print(f"[PASSWORD] User {message.from_user.id} entered: {message.text}")
     if message.text == ACCESS_PASSWORD:
+        # Create temp directory for user session files
         user_sessions[message.from_user.id] = tempfile.mkdtemp()
         print(f"[ACCESS GRANTED] Session created for user {message.from_user.id}")
+        # Move to next state: waiting for domains file
         await state.set_state(FileUploadState.waiting_for_domains)
         await message.answer("✅ Access granted. Please upload `domains.txt`.")
     else:
@@ -57,9 +62,12 @@ async def get_domains(message: types.Message, state: FSMContext):
         return
 
     file_path = os.path.join(user_sessions[message.from_user.id], "domains.txt")
-    # исправлено: используем 'to' вместо 'destination_file'
-    await message.document.download(to=file_path)
+    # Get file object and download to the user session folder
+    file = await message.document.get_file()
+    await file.download(destination=file_path)
     print(f"[UPLOAD] domains.txt received from user {message.from_user.id}")
+
+    # Move to next state: waiting for keywords file
     await state.set_state(FileUploadState.waiting_for_keywords)
     await message.answer("📥 `domains.txt` received. Now upload `keywords.txt`.")
 
@@ -70,25 +78,27 @@ async def get_keywords(message: types.Message, state: FSMContext):
         return
 
     file_path = os.path.join(user_sessions[message.from_user.id], "keywords.txt")
-    # исправлено: используем 'to' вместо 'destination_file'
-    await message.document.download(to=file_path)
+    file = await message.document.get_file()
+    await file.download(destination=file_path)
     print(f"[UPLOAD] keywords.txt received from user {message.from_user.id}")
 
     await message.answer("🚀 Starting the analysis. This may take some time...")
     work_dir = user_sessions[message.from_user.id]
 
-    # Копируем файл анализа в рабочую директорию пользователя
+    # Copy the analysis script to the user session folder as script.py
     script_path = os.path.join(work_dir, "script.py")
     with open("weba_checker_final_fullcontent_check.py", "r", encoding="utf-8") as src:
         with open(script_path, "w", encoding="utf-8") as dst:
             dst.write(src.read())
 
     print(f"[RUN] Executing script for user {message.from_user.id} in {work_dir}")
+    # Run the analysis script as a subprocess
     subprocess.run(["python", script_path], cwd=work_dir)
 
     results_path = os.path.join(work_dir, "results.csv")
     no_match_path = os.path.join(work_dir, "no_match_log.txt")
 
+    # Send the results files to the user if they exist
     if os.path.exists(results_path):
         print(f"[RESULT] Sending results.csv to user {message.from_user.id}")
         await message.answer_document(FSInputFile(results_path))
@@ -98,6 +108,7 @@ async def get_keywords(message: types.Message, state: FSMContext):
 
     await message.answer("✅ Analysis complete. Use /start to begin again.")
     print(f"[DONE] Session complete for user {message.from_user.id}")
+    # Clear the user state to allow a fresh start
     await state.clear()
 
 @router.message()
