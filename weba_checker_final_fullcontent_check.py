@@ -2,6 +2,7 @@ import asyncio
 import os
 import tempfile
 import subprocess
+from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InputFile
 from aiogram.filters import CommandStart, Text
@@ -10,8 +11,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import FSInputFile
 
-API_TOKEN = 'YOUR_TELEGRAM_BOT_API_TOKEN'  # <-- replace with your token
-ACCESS_PASSWORD = '1234'  # <-- set your desired password
+load_dotenv()
+API_TOKEN = os.getenv('API_TOKEN')
+ACCESS_PASSWORD = os.getenv('ACCESS_PASSWORD')
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
