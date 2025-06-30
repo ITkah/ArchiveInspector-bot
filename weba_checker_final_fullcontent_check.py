@@ -1,11 +1,13 @@
+
 import asyncio
 import os
 import tempfile
 import subprocess
 from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import InputFile, FSInputFile
-from aiogram.filters import Command, Text
+
+from aiogram import Bot, Dispatcher, Router, types
+from aiogram.types import FSInputFile
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -18,7 +20,11 @@ print("Bot is starting...")
 print(f"TOKEN loaded: {bool(API_TOKEN)} | PASSWORD loaded: {bool(ACCESS_PASSWORD)}")
 
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher(storage=MemoryStorage())
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
+
+router = Router()
+dp.include_router(router)
 
 class FileUploadState(StatesGroup):
     waiting_for_password = State()
@@ -27,13 +33,13 @@ class FileUploadState(StatesGroup):
 
 user_sessions = {}
 
-@dp.message(Command(commands=["start"]))
+@router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     print(f"[START] User {message.from_user.id} sent /start")
     await state.set_state(FileUploadState.waiting_for_password)
     await message.answer("🔐 Please enter the access password:")
 
-@dp.message(FileUploadState.waiting_for_password)
+@router.message(FileUploadState.waiting_for_password)
 async def check_password(message: types.Message, state: FSMContext):
     print(f"[PASSWORD] User {message.from_user.id} entered: {message.text}")
     if message.text == ACCESS_PASSWORD:
@@ -45,7 +51,7 @@ async def check_password(message: types.Message, state: FSMContext):
         print(f"[ACCESS DENIED] Wrong password from user {message.from_user.id}")
         await message.answer("⛔ Incorrect password. Please try again.")
 
-@dp.message(FileUploadState.waiting_for_domains)
+@router.message(FileUploadState.waiting_for_domains)
 async def get_domains(message: types.Message, state: FSMContext):
     if not message.document:
         await message.answer("⚠️ Please upload the `domains.txt` file.")
@@ -57,7 +63,7 @@ async def get_domains(message: types.Message, state: FSMContext):
     await state.set_state(FileUploadState.waiting_for_keywords)
     await message.answer("📥 `domains.txt` received. Now upload `keywords.txt`.")
 
-@dp.message(FileUploadState.waiting_for_keywords)
+@router.message(FileUploadState.waiting_for_keywords)
 async def get_keywords(message: types.Message, state: FSMContext):
     if not message.document:
         await message.answer("⚠️ Please upload the `keywords.txt` file.")
@@ -70,17 +76,13 @@ async def get_keywords(message: types.Message, state: FSMContext):
     await message.answer("🚀 Starting the analysis. This may take some time...")
     work_dir = user_sessions[message.from_user.id]
 
-    # Copy the main script
     script_path = os.path.join(work_dir, "script.py")
     with open("weba_checker_final_fullcontent_check.py", "r", encoding="utf-8") as src:
         with open(script_path, "w", encoding="utf-8") as dst:
             dst.write(src.read())
 
     print(f"[RUN] Executing script for user {message.from_user.id} in {work_dir}")
-    process = subprocess.run(
-        ["python", script_path],
-        cwd=work_dir
-    )
+    subprocess.run(["python", script_path], cwd=work_dir)
 
     results_path = os.path.join(work_dir, "results.csv")
     no_match_path = os.path.join(work_dir, "no_match_log.txt")
@@ -95,6 +97,11 @@ async def get_keywords(message: types.Message, state: FSMContext):
     await message.answer("✅ Analysis complete. Use /start to begin again.")
     print(f"[DONE] Session complete for user {message.from_user.id}")
     await state.clear()
+
+@router.message()
+async def catch_all(message: types.Message):
+    print(f"[CATCH-ALL] {message.from_user.id}: {message.text}")
+    await message.answer("🤖 Я получил сообщение, но не знаю, как его обработать. Используй /start")
 
 if __name__ == '__main__':
     print("About to start polling...")
