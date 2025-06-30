@@ -25,13 +25,11 @@ dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
-# Define conversation states
 class FileUploadState(StatesGroup):
     waiting_for_password = State()
     waiting_for_domains = State()
     waiting_for_keywords = State()
 
-# Dictionary to store temporary directories for user sessions
 user_sessions = {}
 
 @router.message(Command("start"))
@@ -44,7 +42,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
 async def check_password(message: types.Message, state: FSMContext):
     print(f"[PASSWORD] User {message.from_user.id} entered: {message.text}")
     if message.text == ACCESS_PASSWORD:
-        # Create a temporary directory for this user session
         user_sessions[message.from_user.id] = tempfile.mkdtemp()
         print(f"[ACCESS GRANTED] Session created for user {message.from_user.id}")
         await state.set_state(FileUploadState.waiting_for_domains)
@@ -59,12 +56,11 @@ async def get_domains(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Please upload the `domains.txt` file.")
         return
 
-    file_path = os.path.join(user_sessions[message.from_user.id], "domains.txt")
-    # Get the file via bot API using file_id
+    local_path = os.path.join(user_sessions[message.from_user.id], "domains.txt")
     file = await bot.get_file(message.document.file_id)
-    await file.download(destination=file_path)
-    print(f"[UPLOAD] domains.txt received from user {message.from_user.id}")
+    await bot.download_file(file.file_path, destination=local_path)
 
+    print(f"[UPLOAD] domains.txt received from user {message.from_user.id}")
     await state.set_state(FileUploadState.waiting_for_keywords)
     await message.answer("📥 `domains.txt` received. Now upload `keywords.txt`.")
 
@@ -74,15 +70,15 @@ async def get_keywords(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Please upload the `keywords.txt` file.")
         return
 
-    file_path = os.path.join(user_sessions[message.from_user.id], "keywords.txt")
+    local_path = os.path.join(user_sessions[message.from_user.id], "keywords.txt")
     file = await bot.get_file(message.document.file_id)
-    await file.download(destination=file_path)
+    await bot.download_file(file.file_path, destination=local_path)
+
     print(f"[UPLOAD] keywords.txt received from user {message.from_user.id}")
 
     await message.answer("🚀 Starting the analysis. This may take some time...")
     work_dir = user_sessions[message.from_user.id]
 
-    # Copy the analysis script into the user session directory as script.py
     script_path = os.path.join(work_dir, "script.py")
     with open("weba_checker_final_fullcontent_check.py", "r", encoding="utf-8") as src:
         with open(script_path, "w", encoding="utf-8") as dst:
