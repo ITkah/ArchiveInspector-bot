@@ -25,13 +25,13 @@ dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
-# Define states for conversation flow
+# Define conversation states
 class FileUploadState(StatesGroup):
     waiting_for_password = State()
     waiting_for_domains = State()
     waiting_for_keywords = State()
 
-# Temporary user session data storage
+# Dictionary to store temporary directories for user sessions
 user_sessions = {}
 
 @router.message(Command("start"))
@@ -44,6 +44,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 async def check_password(message: types.Message, state: FSMContext):
     print(f"[PASSWORD] User {message.from_user.id} entered: {message.text}")
     if message.text == ACCESS_PASSWORD:
+        # Create a temporary directory for this user session
         user_sessions[message.from_user.id] = tempfile.mkdtemp()
         print(f"[ACCESS GRANTED] Session created for user {message.from_user.id}")
         await state.set_state(FileUploadState.waiting_for_domains)
@@ -59,9 +60,8 @@ async def get_domains(message: types.Message, state: FSMContext):
         return
 
     file_path = os.path.join(user_sessions[message.from_user.id], "domains.txt")
-    # Get File object via bot using file_id
+    # Get the file via bot API using file_id
     file = await bot.get_file(message.document.file_id)
-    # Download the file to user session folder
     await file.download(destination=file_path)
     print(f"[UPLOAD] domains.txt received from user {message.from_user.id}")
 
@@ -82,6 +82,7 @@ async def get_keywords(message: types.Message, state: FSMContext):
     await message.answer("🚀 Starting the analysis. This may take some time...")
     work_dir = user_sessions[message.from_user.id]
 
+    # Copy the analysis script into the user session directory as script.py
     script_path = os.path.join(work_dir, "script.py")
     with open("weba_checker_final_fullcontent_check.py", "r", encoding="utf-8") as src:
         with open(script_path, "w", encoding="utf-8") as dst:
