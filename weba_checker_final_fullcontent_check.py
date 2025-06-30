@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import tempfile
@@ -58,7 +57,8 @@ async def get_domains(message: types.Message, state: FSMContext):
         return
 
     file_path = os.path.join(user_sessions[message.from_user.id], "domains.txt")
-    await message.document.download(destination_file=file_path)
+    # исправлено: используем 'to' вместо 'destination_file'
+    await message.document.download(to=file_path)
     print(f"[UPLOAD] domains.txt received from user {message.from_user.id}")
     await state.set_state(FileUploadState.waiting_for_keywords)
     await message.answer("📥 `domains.txt` received. Now upload `keywords.txt`.")
@@ -70,12 +70,14 @@ async def get_keywords(message: types.Message, state: FSMContext):
         return
 
     file_path = os.path.join(user_sessions[message.from_user.id], "keywords.txt")
-    await message.document.download(destination_file=file_path)
+    # исправлено: используем 'to' вместо 'destination_file'
+    await message.document.download(to=file_path)
     print(f"[UPLOAD] keywords.txt received from user {message.from_user.id}")
 
     await message.answer("🚀 Starting the analysis. This may take some time...")
     work_dir = user_sessions[message.from_user.id]
 
+    # Копируем файл анализа в рабочую директорию пользователя
     script_path = os.path.join(work_dir, "script.py")
     with open("weba_checker_final_fullcontent_check.py", "r", encoding="utf-8") as src:
         with open(script_path, "w", encoding="utf-8") as dst:
@@ -101,7 +103,7 @@ async def get_keywords(message: types.Message, state: FSMContext):
 @router.message()
 async def catch_all(message: types.Message):
     print(f"[CATCH-ALL] {message.from_user.id}: {message.text}")
-    await message.answer("🤖 Я получил сообщение, но не знаю, как его обработать. Используй /start")
+    await message.answer("🤖 I received a message but don't know how to process it. Use /start")
 
 if __name__ == '__main__':
     print("About to start polling...")
