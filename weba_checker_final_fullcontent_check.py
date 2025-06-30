@@ -4,12 +4,11 @@ import tempfile
 import subprocess
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import InputFile
-from aiogram.filters import CommandStart, Text
+from aiogram.types import InputFile, FSInputFile
+from aiogram.filters import Command, Text
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import FSInputFile
 
 load_dotenv()
 API_TOKEN = os.getenv('API_TOKEN')
@@ -25,7 +24,7 @@ class FileUploadState(StatesGroup):
 
 user_sessions = {}
 
-@dp.message(CommandStart())
+@dp.message(Command(commands=["start"]))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.set_state(FileUploadState.waiting_for_password)
     await message.answer("🔐 Please enter the access password:")
